@@ -56,6 +56,10 @@ struct file_s {
   vector<boost::shared_array<char> > contents;
 };
 
+struct category {
+  
+};
+
 void signal_handler(int sig) {
   switch(sig) {
     case SIGINT:
@@ -72,6 +76,37 @@ void signal_handler(int sig) {
 }
 
 static int train_callback(const char *fpath, const struct stat *sb, int typeflag) {
+  string fpathnew = "";
+  int move_file = 0, length, segments;
+  ifstream fd;
+  char *lenbuf;
+  struct stat stat_file;
+  if (typeflag == FTW_F) {
+    stat(fpath, &stat_file);
+    if(stat_file.st_size < 10485760 /* 10 mb */) {
+      file_s current_file;
+      current_file.fname = fpath;
+      current_file.length = length;
+      
+      syslog(LOG_ALERT, "Analyzing file: %s", fpath);
+      
+      fd.open(fpath, ios::in | ios::binary);
+      fd.seekg(0, ios::end);
+      length = fd.tellg();
+      fd.seekg(0, ios::beg);
+      while(!fd.eof()){
+        boost::shared_array<char> fbuf = boost::shared_array<char>(new char[1024]);
+        fd.read(fbuf.get(),1024);
+        current_file.contents.push_back(fbuf);
+      }
+      fd.close();
+      
+      // compute likelihood of bytes at pos_{i}
+    }
+  }
+  if(1 == g_die){
+    exit(EXIT_SUCCESS);
+  }
   return 0;
 }
 
@@ -101,11 +136,15 @@ static int classify_callback(const char *fpath, const struct stat *sb, int typef
       }
       fd.close();
       
-      // attempt to classify
-      if(rand() % 10 > 9){
-        move_file = 1;
-        fpathnew = "foo/bar";
-      } else { move_file = 0; }
+      int classification = 0; // classify
+      switch(classification){
+        case 1:
+          move_file = 1;
+          fpathnew = "foo/bar";
+          break;
+        default:
+          move_file = 0;
+      }
       if(move_file){
         syslog(LOG_ALERT, "Sorting file: %s -> %s", fpath, fpathnew.c_str());
       }
@@ -165,11 +204,10 @@ int main (int argc, char * const argv[]) {
 
 #if defined(DEBUG)
   setlogmask(LOG_UPTO(LOG_DEBUG));
-  openlog("neatd", LOG_CONS | LOG_NDELAY | LOG_PERROR | LOG_PID, LOG_USER);
 #else
   setlogmask(LOG_UPTO(LOG_INFO));
-  openlog("neatd", LOG_CONS, LOG_USER);
 #endif
+  openlog("neatd", LOG_CONS | LOG_NDELAY | LOG_PERROR | LOG_PID, LOG_USER);
 
   pid_t pid, sid;
 
@@ -194,12 +232,12 @@ int main (int argc, char * const argv[]) {
     close(STDOUT_FILENO);
     close(STDERR_FILENO);
   }
-  
+
   for(lp = 0; lp<neat_conf.sorted_paths.size(); lp++){
     syslog(LOG_NOTICE, "Scanning %s...", neat_conf.sorted_paths[lp].c_str());
     ftw(neat_conf.sorted_paths[lp].c_str(), train_callback, 1);
   }
-  
+
   while (1) {
     for(lp = 0; lp<neat_conf.monitor_paths.size(); lp++){
       syslog(LOG_NOTICE, "Scanning %s...", neat_conf.monitor_paths[lp].c_str());
