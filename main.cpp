@@ -23,11 +23,13 @@
  ********END LICENSE BLOCK*********/
 
 #include <iostream>
+#include <fstream>
 #include <signal.h>
 #include <getopt.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -58,6 +60,23 @@ void signal_handler(int sig) {
   }
 }
 
+char* strings(const char *fpath){
+  ifstream fd;
+  int length;
+  char * lenbuf;
+  fd.open(fpath, ios::in | ios::binary);
+  fd.seekg(0, ios::end);
+  length = fd.tellg();
+  fd.seekg(0, ios::beg);
+  char* buffer = new char[length];
+  fd.read(buffer,length);
+  fd.close();
+  lenbuf = new char[sizeof(length)];
+  sprintf(lenbuf, "%d bytes", length);
+  syslog(LOG_ALERT, lenbuf);
+  return buffer;
+}
+
 static int callback(const char *fpath, const struct stat *sb, int typeflag) {
   string fpathnew = "";
   int move_file = 0;
@@ -65,6 +84,13 @@ static int callback(const char *fpath, const struct stat *sb, int typeflag) {
   if (typeflag == FTW_F) {
     stat(fpath, &stat_file);
     if(stat_file.st_size < 10485760 /* 10 mb */) {
+      syslog(LOG_ALERT, "Analyzing file: %s", fpath);
+      strings(fpath);
+      exit(0);
+      
+      // create feature vector <file size, file type, headers, strings content>
+      
+      // attempt to classify
       if(rand() % 10 > 9){
         move_file = 1;
         fpathnew = "foo/bar";
@@ -85,7 +111,7 @@ int main (int argc, char * const argv[]) {
   int daemonize = 1;
 #endif
 
-  int logflag = 0;
+  int logflag, lp = 0;
   static int ch;
   string config_file = "";
 
@@ -149,8 +175,10 @@ int main (int argc, char * const argv[]) {
     close(STDERR_FILENO);
   }
   while (0 == g_die) {
-    syslog(LOG_NOTICE, "Scanning ~/Desktop...");
-    ftw("/Users/maxhodak/Desktop", callback, 1);
+    for(lp = 0; lp<sizeof(neat_conf.sorted_paths); lp++){
+      syslog(LOG_NOTICE, "Scanning %s...", neat_conf.sorted_paths[lp].c_str());
+      ftw("/Users/maxhodak/Desktop", callback, 1);      
+    }
     sleep(120);
   }
   exit(EXIT_SUCCESS);
