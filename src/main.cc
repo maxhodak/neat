@@ -101,7 +101,8 @@ static int train_callback(const char *fpath, const struct stat *sb, int typeflag
       }
       fd.close();
       
-      // compute likelihood of bytes at pos_{i}
+      
+      
     }
   }
   if(1 == g_die){
