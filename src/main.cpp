@@ -71,7 +71,11 @@ void signal_handler(int sig) {
   }
 }
 
-static int callback(const char *fpath, const struct stat *sb, int typeflag) {
+static int train_callback(const char *fpath, const struct stat *sb, int typeflag) {
+  return 0;
+}
+
+static int classify_callback(const char *fpath, const struct stat *sb, int typeflag) {
   string fpathnew = "";
   int move_file = 0, length, segments;
   ifstream fd;
@@ -113,6 +117,9 @@ static int callback(const char *fpath, const struct stat *sb, int typeflag) {
       //exit(0);
     }
   }
+  if(1 == g_die){
+    exit(EXIT_SUCCESS);
+  }
   return 0;
 }
 
@@ -151,9 +158,9 @@ int main (int argc, char * const argv[]) {
   if("" != config_file){
     // neat_conf = luaConf->parse(config_file);
   } else {
-    neat_conf.monitor_paths.push_back("~/Desktop");
-    neat_conf.sorted_paths.push_back("~/Documents");
-    neat_conf.sorted_paths.push_back("~/Pictures");
+    neat_conf.monitor_paths.push_back("/Users/maxhodak/Desktop");
+    neat_conf.sorted_paths.push_back("/Users/maxhodak/Documents");
+    neat_conf.sorted_paths.push_back("/Users/maxhodak/Pictures");
   }
 
 #if defined(DEBUG)
@@ -187,10 +194,19 @@ int main (int argc, char * const argv[]) {
     close(STDOUT_FILENO);
     close(STDERR_FILENO);
   }
-  while (0 == g_die) {
-    for(lp = 0; lp<sizeof(neat_conf.sorted_paths); lp++){
-      syslog(LOG_NOTICE, "Scanning %s...", neat_conf.sorted_paths[lp].c_str());
-      ftw("/Users/maxhodak/Desktop", callback, 1);      
+  
+  for(lp = 0; lp<neat_conf.sorted_paths.size(); lp++){
+    syslog(LOG_NOTICE, "Scanning %s...", neat_conf.sorted_paths[lp].c_str());
+    ftw(neat_conf.sorted_paths[lp].c_str(), train_callback, 1);
+  }
+  
+  while (1) {
+    for(lp = 0; lp<neat_conf.monitor_paths.size(); lp++){
+      syslog(LOG_NOTICE, "Scanning %s...", neat_conf.monitor_paths[lp].c_str());
+      ftw(neat_conf.monitor_paths[lp].c_str(), classify_callback, 1);
+    }
+    if(1 == g_die){
+      exit(EXIT_SUCCESS);
     }
     sleep(120);
   }
