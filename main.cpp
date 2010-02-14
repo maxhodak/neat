@@ -36,6 +36,11 @@
 #include <syslog.h>
 #include <string.h>
 #include <ftw.h>
+#include <math.h>
+#include <algorithm>
+#include <boost/shared_array.hpp>
+#include <boost/foreach.hpp>
+#include <boost/make_shared.hpp>
 
 #include "config.h"
 
@@ -44,6 +49,12 @@
 using namespace std;
 
 int g_die = 0;
+
+struct file_s {
+  int length;
+  const char * fname;
+  vector<boost::shared_array<char> > contents;
+};
 
 void signal_handler(int sig) {
   switch(sig) {
@@ -60,35 +71,31 @@ void signal_handler(int sig) {
   }
 }
 
-char* strings(const char *fpath){
-  ifstream fd;
-  int length;
-  char * lenbuf;
-  fd.open(fpath, ios::in | ios::binary);
-  fd.seekg(0, ios::end);
-  length = fd.tellg();
-  fd.seekg(0, ios::beg);
-  char* buffer = new char[length];
-  fd.read(buffer,length);
-  fd.close();
-  lenbuf = new char[sizeof(length)];
-  sprintf(lenbuf, "%d bytes", length);
-  syslog(LOG_ALERT, lenbuf);
-  return buffer;
-}
-
 static int callback(const char *fpath, const struct stat *sb, int typeflag) {
   string fpathnew = "";
-  int move_file = 0;
+  int move_file = 0, length, segments;
+  ifstream fd;
+  char *lenbuf;
   struct stat stat_file;
   if (typeflag == FTW_F) {
     stat(fpath, &stat_file);
     if(stat_file.st_size < 10485760 /* 10 mb */) {
-      syslog(LOG_ALERT, "Analyzing file: %s", fpath);
-      strings(fpath);
-      exit(0);
+      file_s current_file;
+      current_file.fname = fpath;
+      current_file.length = length;
       
-      // create feature vector <file size, file type, headers, strings content>
+      syslog(LOG_ALERT, "Analyzing file: %s", fpath);
+      
+      fd.open(fpath, ios::in | ios::binary);
+      fd.seekg(0, ios::end);
+      length = fd.tellg();
+      fd.seekg(0, ios::beg);
+      while(!fd.eof()){
+        boost::shared_array<char> fbuf = boost::shared_array<char>(new char[1024]);
+        fd.read(fbuf.get(),1024);
+        current_file.contents.push_back(fbuf);
+      }
+      fd.close();
       
       // attempt to classify
       if(rand() % 10 > 9){
@@ -97,7 +104,13 @@ static int callback(const char *fpath, const struct stat *sb, int typeflag) {
       } else { move_file = 0; }
       if(move_file){
         syslog(LOG_ALERT, "Sorting file: %s -> %s", fpath, fpathnew.c_str());
-      }      
+      }
+      
+      //BOOST_FOREACH(boost::shared_array<char> ch, current_file.contents) {
+      //  cout.write(ch.get(), 1024);
+      //  cout << endl;
+      //}
+      //exit(0);
     }
   }
   return 0;
